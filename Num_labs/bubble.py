@@ -162,7 +162,7 @@ class HerringFlynnModel(BubbleModelBase):
 		dpr_part = +2 * sigma * v / r**2 + 4 * eta * (v / r)**2 - dpa + dpg 			
 
 		res[0] = v
-		res[1] = (-3/2 * v**2 + 2 * v**3 / c + (pr - p0) / rho0) / (r - 2 * r*v / c + 4 * eta/r) + dpr_part / (c*rho0 - 2 * v*rho0 + 4 * eta*c*rho0 / r**2)
+		res[1] = (-3/2 * v**2 + 2 * v**3 / c + (pr - p0) / rho0) / (r - 2 * r*v / c + 4 * eta/c/rho0) + dpr_part / (c*rho0 - 2 * v * rho0 + 4 * eta / r)
 
 		return res
 
@@ -220,7 +220,7 @@ class KellerMiksisModel(BubbleModelBase):
 		dpr_part = +2 * sigma * v / r**2 + 4 * eta * (v / r)**2 - dpa + dpg 			
 
 		res[0] = v
-		res[1] = (-3/2 * v**2 + 1/2 * v**3 / c + (1 + v / c) * (pr - p0) / rho0) / (r - r*v / c + 4 * eta/r) + dpr_part / (c*rho0 - v*rho0 + 4 * eta*c*rho0 / r**2)
+		res[1] = (-3/2 * v**2 + 1/2 * v**3 / c + (1 + v / c) * (pr - p0) / rho0) / (r - r*v / c + 4 * eta/c/rho0) + dpr_part / (c*rho0 - v *rho0 + 4 * eta / r)
 
 		return res
 
@@ -314,68 +314,61 @@ def evaluate_model(solver, model, dt, n):
 
 		solver.evolve(i * dt, dt)
 
-	fig = pyplot.figure()
-	ax = fig.add_subplot(1, 1, 1)
-	ax.plot(t, r)
-	#ax = fig.add_subplot(1, 3, 2)
-	#ax.plot(t, v)
-	#ax = fig.add_subplot(1, 3, 3)
-	#ax.plot(t, p)
-	pyplot.show()
+	return r, v, p, t
 	
 
-def evaluate_rayleigh_plesset_model():
+def evaluate_rayleigh_plesset_model(dt = 0.5e-9, N = 200000):
 	model = RayleighPlessetModel(
-		  0.00010197
+		  0.000008 
 		, 1000.0
-		, 0.000021966
+		, 0.000021966 
 		, 0.0
-		, 1e5
-		, 0.5e4
-		, 1e-5
+		, 1e5 ###
 		, 0.0
-		, 0.28
+		, 5e-5 ###
+		, 0.0
+		, 0.3
 		, 1.4
-		, 20000.0
+		, 22000.0
 	)
 
-	rv = np.float64((1e-5, 0.0))
+	rv = np.float64((5e-5, 0.0)) ###
 
-	solver = s.RKE(s.classic_4(), model, rv)
+	solver = s.RKE(s.classic_4(), model, 0.0, rv)
 
-	evaluate_model(solver, model, 1e-9, 5000)
+	return evaluate_model(solver, model, dt, N)
 
-def evaluate_herring_flynn_model():
+def evaluate_herring_flynn_model(dt = 0.5e-9, N = 200000):
 	model = HerringFlynnModel(
-		  0.00010197
+		  0.00008
 		, 1000.0
 		, 0.000021966
 		, 0.0
-		, 1e5
-		, 0.5e4
-		, 1e-5
+		, 1e5 ###
+		, 0.0
+		, 5e-5 ###
 		, 0.0
 		, 0.28
 		, 1.4
-		, 20000.0
+		, 22000.0
 		, 1500
 	)
 
-	rv = np.float64((1e-5, 0.0))
+	rv = np.float64((5e-5, 0.0)) ###
 
-	solver = s.RKE(s.classic_4(), model, rv)
+	solver = s.RKE(s.classic_4(), model, 0.0, rv)
 
-	evaluate_model(solver, model, 1e-8, 200000)
+	return evaluate_model(solver, model, dt, N)
 
-def evaluate_keller_miksis_model():
+def evaluate_keller_miksis_model(dt = 0.5e-9, N = 200000):
 	model = KellerMiksisModel(
-		  0.00010197
+		  0.0008
 		, 1000.0
 		, 0.000021966
 		, 0.0
 		, 1e5
 		, 0.5e4
-		, 1e-5
+		, 5e-7
 		, 0.0
 		, 0.28
 		, 1.4
@@ -383,21 +376,38 @@ def evaluate_keller_miksis_model():
 		, 1500
 	)
 
-	rv = np.float64((1e-5, 0.0))
+	rv = np.float64((5e-7, 0.0))
 
-	solver = s.RKE(s.classic_4(), model, rv)
+	solver = s.RKE(s.classic_4(), model, 0.0, rv)
 
-	evaluate_model(solver, model, 1e-6, 10000)
+	return evaluate_model(solver, model, dt, N)
 
-def evaluate_gilmore_model():
+def evaluate_gilmore_model(dt, N):
+
 	pass
 
 
 def main():
-	#evaluate_rayleigh_plesset_model()
-	evaluate_herring_flynn_model()
-	#evaluate_keller_miksis_model()
-	pass
+	r0, v0, p0, t0 = evaluate_rayleigh_plesset_model(0.25e-9, 1000000)
+	r1, v1, p1, t1 = evaluate_herring_flynn_model(0.25e-9, 1000000)
+	#r2, v2, p2, t2 = evaluate_keller_miksis_model(0.25e-9, 500000)
+
+
+	fig = pyplot.figure()
+
+	ax = fig.add_subplot(1, 2, 1)
+	ax.plot(t0, r0, linewidth = 1, label = 'r-p', linestyle = '--')
+	ax.plot(t1, r1, linewidth = 1, label = 'h-f', linestyle = ':')
+	#ax.plot(t2, r2, linewidth = 1, label = 'k-m', linestyle = '--')
+	ax.legend(loc = 1)
+
+	ax = fig.add_subplot(1, 2, 2)
+	ax.plot(t0, p0, linewidth = 1, label = 'r-p', linestyle = '--')
+	ax.plot(t1, p1, linewidth = 1, label = 'h-f', linestyle = ':')
+	#ax.plot(t2, p2, linewidth = 1, label = 'k-m', linestyle = '--')
+	ax.legend(loc = 1)
+
+	pyplot.show()
 
 if __name__ == '__main__':
 	main()

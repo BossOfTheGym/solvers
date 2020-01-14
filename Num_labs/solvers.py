@@ -2,10 +2,9 @@ import math as m
 import numpy as np
 import numpy.polynomial as poly
 import numpy.linalg as lin
-import linsolve
 
 
-#utility
+# utility
 def factorial(num):
 	res = 1
 	while num > 1:
@@ -82,23 +81,6 @@ class DiffJacobian2:
 
 		return jac
 
-class BindFirst:
-	def __init__(self, func, first):
-		self.func  = func
-		self.first = first
-
-	def __call__(self, second):
-		return self.func(self.first, second)
-
-class LinearCombination:
-	def __init__(self, func, A, B):
-		self.func = func
-		self.A = A
-		self.B = B
-
-	def __call_(self, arg):
-		return A * self.func(arg) + B
-
 
 
 #solver for nonlinear systems
@@ -116,7 +98,6 @@ class NeutonSolver:
 			term = -func(x_k)
 
 			delta = lin.solve(sys, term)
-			#delta = linsolve.gaussian_elimination_solve(sys, term)
 
 			x_k += delta
 			iters += 1
@@ -134,14 +115,14 @@ class SolverBase:
 		self.jacobian = jacobian
 
 		self.t = t0
-		self.u = u0
+		self.u = u0.copy()
 
 	def set_state(self, t, u):
 		self.t = t
 		self.u = u
 
 	def get_state(self):
-		return self.t, self.u
+		return self.t, self.u.copy()
 
 	def value(self):
 		return self.u
@@ -151,7 +132,7 @@ class SolverBase:
 		pass
 	
 
-#Runge-Kutta methods
+# Runge-Kutta methods
 class Tableau:
 	def __init__(self, order, aMat, bVec, cVec):
 		self.order = order
@@ -159,7 +140,7 @@ class Tableau:
 		self.bVec = np.copy(bVec)
 		self.cVec = np.copy(cVec)
 
-#explicit
+# explicit
 def classic_4():
 	aMat = np.float64(
 		(
@@ -176,7 +157,7 @@ def classic_4():
 
 	return Tableau(4, aMat, bVec, cVec)
 
-#implicit
+# implicit
 def backward_euler_1():
 	a_mat = np.float64( ((1,),) )
 	b_vec = np.float64( (1,) )
@@ -190,26 +171,6 @@ def implicit_midpoint_2():
 	c_vec = np.float64((0.5,))
 
 	return Tableau(1, a_mat, b_vec, c_vec)
-
-def kra_spi_2():
-	a_mat = np.float64((
-		  (+1/2, 0)
-		, (-1/2, 2) 
-	))
-	b_vec = np.float64((-1/2, 3/2))
-	c_vec = np.float64((+1/2, 3/2))
-
-	return Tableau(2, a_mat, b_vec, c_vec)
-
-def qin_zha_2():
-	a_mat = np.float64((
-		  (+1/4, 0)
-		, (+1/2, 1/4) 
-	))
-	b_vec = np.float64((1/2, 1/2))
-	c_vec = np.float64((1/4, 3/4))
-
-	return Tableau(2, a_mat, b_vec, c_vec)
 
 def lobattoIIIC_2():
 	a_mat = np.float64((
@@ -246,18 +207,13 @@ def gauss_legendre_6():
 	return Tableau(3, a_mat, b_vec, c_vec)
 
 
-class RKE:
-	def __init__(self, tableau, func, u0):
+class RKE(SolverBase):
+	def __init__(self, tableau, func, t0, u0):
+		super(RKE, self).__init__(func, None, t0, u0) 
+
 		self.tableau = tableau
 		self.rke_order = tableau.order
 		self.sys_order = len(u0)
-		self.u = u0.copy()
-
-		self.f = func
-
-	def value(self):
-
-		return self.u
 
 	def evolve(self, t, dt):
 		aMat, bVec, cVec = self.tableau.aMat, self.tableau.bVec, self.tableau.cVec
@@ -266,33 +222,26 @@ class RKE:
 		for i in range(self.rke_order):
 			for j in range(i):
 				kVecs[i] += dt * kVecs[j] * aMat[i][j]
-			kVecs[i] = self.f(t + dt * cVec[i], self.u + kVecs[i])
+			kVecs[i] = self.function(t + dt * cVec[i], self.u + kVecs[i])
 
 		du = np.zeros((self.sys_order, ), np.float64)
 		for i in range(self.rke_order):
 			du += dt * bVec[i] * kVecs[i]
 
+		self.t = t + dt # DANGER
 		self.u += du
 
-# TODO : specialJacobian -> inner class SpecialJacobian
-# TODO : specialFunction -> inner class SpecialFunction
-class RKI_naive:
-	def __init__(self, tableau, func, jacob, neuton_solver, u0):
+class RKI_naive(SolverBase):
+	def __init__(self, tableau, function, jacobian, neuton_solver, t0, u0):
+		super(RKI_naive, self).__init__(function, jacobian, t0, u0)
+
 		self.tableau = tableau
 		self.rki_order = tableau.order
 		self.sys_order = len(u0)
 
-		self.u  = u0.copy()
-		self.t  = 0.0
 		self.dt = 0.0
 
-		self.function = func
-		self.jacobian = jacob
 		self.neuton_solver = neuton_solver	
-
-	def value(self):
-
-		return self.u
 
 	def evolve(self, t, dt):
 		self.t  = t
@@ -324,6 +273,7 @@ class RKI_naive:
 		du *= dt
 
 		#update result
+		self.t = t + dt # DANGER
 		self.u += du
 
 	def __special_jacobian(self, z):
@@ -380,25 +330,19 @@ class RKI_naive:
 
 		return z - special_function		
 
-# TODO : specialJacobian -> inner class SpecialJacobian
-# TODO : specialFunction -> inner class SpecialFunction		
-class RKI_better:
-	def __init__(self, tableau, func, jacob, neuton_solver, u0):
+class RKI_better(SolverBase):
+	def __init__(self, tableau, function, jacobian, neuton_solver, t0, u0):
+		super(RKI_better, self).__init__(function, jacobian, t0, u0)
+
 		self.tableau = tableau
 		self.rki_order = tableau.order
 		self.sys_order = len(u0)
 
-		self.u  = u0.copy()
-		self.t  = 0.0
 		self.dt = 0.0
 
 		self.function = func
 		self.jacobian = jacob
 		self.neuton_solver = neuton_solver	
-
-	def value(self):
-
-		return self.u
 
 	def evolve(self, t, dt):
 		self.t  = t
@@ -476,31 +420,37 @@ class RKI_better:
 
 
 
-#coefs for Adams methods
+# multistep methods
+# coefs for Adams methods
 def build_explicit_adams(order):
 	# produces list of order elements
 	# coefs go from lower degree to the higher
 
 	s = order
 
-	if s == 1:
-		return [1]
-
 	b_coefs = []
-	for j in range(s):
-		all_roots = [-i for i in range(s) if i != j]
+	if s == 1:
+		b_coefs = [1]
+	else:
+		for j in range(s):
+			all_roots = [-i for i in range(s) if i != j]
 
-		integrand = poly.Polynomial.fromroots(all_roots)
-		integral  = integrand.integ()			
-		value     = integral(1.0)		
+			integrand = poly.Polynomial.fromroots(all_roots)
+			integral  = integrand.integ()			
+			value     = integral(1.0)		
 
-		minus_one = 1 if j % 2 == 0 else -1
-		coef      = minus_one / factorial(j) / factorial(s - j - 1) * value
+			minus_one = 1 if j % 2 == 0 else -1
+			coef      = minus_one / factorial(j) / factorial(s - j - 1) * value
 
-		b_coefs.append(coef)
+			b_coefs.append(coef)
 
-	b_coefs.reverse()
-	return b_coefs
+		b_coefs.reverse()
+
+	a_coefs = [0 for i in range(len(b_coefs) + 1)]
+	a_coefs[-1] = +1
+	a_coefs[-2] = -1
+
+	return a_coefs, b_coefs
 
 def build_implicit_adams(order):
 	# produces list of orer + 1 elements
@@ -508,51 +458,109 @@ def build_implicit_adams(order):
 
 	s = order
 
-	if s == 0:
-		return [0, 1]
-
 	b_coefs = []
-	for j in range(s + 1):
-		all_roots = [-(i - 1) for i in range(s + 1) if i != j]
+	if s == 0:
+		b_coefs = [0, 1]
+	else:
+		for j in range(s + 1):
+			all_roots = [-(i - 1) for i in range(s + 1) if i != j]
 
-		integrand = poly.Polynomial.fromroots(all_roots)
-		integral  = integrand.integ()			
-		value     = integral(1.0)		
+			integrand = poly.Polynomial.fromroots(all_roots)
+			integral  = integrand.integ()			
+			value     = integral(1.0)		
 
-		minus_one = 1 if j % 2 == 0 else -1
-		coef      = minus_one / factorial(j) / factorial(s - j) * value
+			minus_one = 1 if j % 2 == 0 else -1
+			coef      = minus_one / factorial(j) / factorial(s - j) * value
 
-		b_coefs.append(coef)
+			b_coefs.append(coef)
 
-	b_coefs.reverse()
-	return b_coefs
+		b_coefs.reverse()
+
+	a_coefs = [0 for i in range(len(b_coefs))]
+	a_coefs[-1] = +1
+	a_coefs[-2] = -1
+
+	return a_coefs, b_coefs
+
+# coefs for BDF methods
+def build_bdf_1():
+	a_coefs = [-1, 1]
+	b_coefs = [0, 1]
+
+	return np.float64(a_coefs), np.float64(b_coefs)
+
+def build_bdf_2():
+	a_coefs = [1/3, -4/3, 1]
+	b_coefs = [0, 0, 2/3]
+
+	return np.float64(a_coefs), np.float64(b_coefs)
+
+def build_bdf_3():
+	a_coefs = [2/11, 9/11, -18/11, 1]
+	b_coefs = [0, 0, 0, 6/11]
+
+	return np.float64(a_coefs), np.float64(b_coefs)
+
+def build_bdf_4():
+	a_coefs = [3/25, -16/25, 36/25, -48/25, 1]
+	b_coefs = [0, 0, 0, 0, 12/25]
+
+	return np.float64(a_coefs), np.float64(b_coefs)
+
+def build_bdf_5():
+	a_coefs = [-12/137, 75/137, -200/137, 300/137, -300/137, 1]
+	b_coefs = [0, 0, 0, 0, 0, 60/137]
+
+	return np.float64(a_coefs), np.float64(b_coefs)
+
+def build_bdf_6():
+	a_coefs = [10/147, -72/147, 225/147, -400/147, 450/147, -360/147, 1]
+	b_coefs = [0, 0, 0, 0, 0, 0, 60/147]
+
+	return a_coefs, b_coefs
+
+def build_bdf(order):
+	order = (1 if order < 1 else order)
+	order = (6 if order > 6 else order)
+
+	if order == 2:
+		return build_bdf_2()
+	if order == 3:
+		return build_bdf_3()
+	if order == 4:
+		return build_bdf_4()
+	if order == 5:
+		return build_bdf_5()
+	if order == 6:
+		return build_bdf_6()
+
+	return build_bdf_1()
 
 
-# TODO : specialJacobian -> inner class SpecialJacobian
-# TODO : specialFunction -> inner class SpecialFunction
-class AdamsExplicitSolver:
-	def __init__(self, order, ivp_solver, function, t, dt):
+class AdamsExplicitSolver(SolverBase):
+	def __init__(self, order, ivp_solver, dt):
 		# order >= 1
 		# ivp_solver should guarantee appropriate accuracy
-
-		self.function = function
+		super(AdamsExplicitSolver, self).__init__(ivp_solver.function, ivp_solver.jacobian, ivp_solver.t, ivp_solver.u)
+		
+		self.ivp_solver = ivp_solver
 
 		self.sys_order = len(ivp_solver.value())
 
 		self.dt = dt
 
-		self.coefs = np.float64(build_explicit_adams(order))
+		a, b = build_explicit_adams(order)
+		self.coefs = np.float64(b)
 		self.steps = len(self.coefs)
 
 		self.values = np.zeros((self.steps, self.sys_order), np.float64)
 		for i in range(self.steps - 1):
 			self.values[i][:] = ivp_solver.value()[:]
-			ivp_solver.evolve(t + i * dt, dt)
+			ivp_solver.evolve(self.t + i * dt, dt)
 		self.values[-1][:] = ivp_solver.value()[:]
 
-	def value(self):
-
-		return self.values[-1]
+		self.t = ivp_solver.t
+		self.u[:] = self.values[-1][:]
 
 	def evolve(self, t, dt):
 		# dt - ignored
@@ -569,41 +577,42 @@ class AdamsExplicitSolver:
 
 		self.__right_round_like_a_record_baby(next)
 
+		self.t = t + dt # DANGER
+		self.u[:] = self.values[-1][:]
+
 	def __right_round_like_a_record_baby(self, value):
 		for i in range(self.steps - 1):
 			self.values[i][:] = self.values[i + 1][:]
 		self.values[-1][:] = value[:]
 
-# TODO : specialJacobian -> inner class SpecialJacobian
-# TODO : specialFunction -> inner class SpecialFunction
-class AdamsImplicitSolver:
-	def __init__(self, order, ivp_solver, function, jacobian, neuton_solver, t, dt):
+class AdamsImplicitSolver(SolverBase):
+	def __init__(self, order, ivp_solver, neuton_solver, dt):
 		# order >= 0
 		# ivp_solver should guarantee appropriate accuracy
 
-		self.function = function
-		self.jacobian = jacobian
+		super(AdamsImplicitSolver, self).__init__(ivp_solver.function, ivp_solver.jacobian, ivp_solver.t, ivp_solver.u)
+
+		self.ivp_solver = ivp_solver
 		self.neuton_solver = neuton_solver
 
 		self.sys_order = len(ivp_solver.value())
 
-		self.t  = None
 		self.dt = dt
 		self.A  = None
 		self.B  = None
 
-		self.coefs = np.float64(build_implicit_adams(order))
+		a, b = build_implicit_adams(order)
+		self.coefs = np.float64(b)
 		self.steps = len(self.coefs) - 1
 
 		self.values = np.zeros((self.steps, self.sys_order), np.float64)
 		for i in range(self.steps - 1):
 			self.values[i][:] = ivp_solver.value()
-			ivp_solver.evolve(t + i * dt, dt)
+			ivp_solver.evolve(self.t + i * dt, dt)
 		self.values[-1][:] = ivp_solver.value()
 
-	def value(self):
-
-		return self.values[-1]
+		self.t = ivp_solver.t
+		self.u[:] = self.values[-1][:]
 
 	def evolve(self, t, dt):
 		# dt - ignored
@@ -629,6 +638,9 @@ class AdamsImplicitSolver:
 
 		self.__right_round_like_a_record_baby(next)
 
+		self.t = t + dt
+		self.u = self.values[-1][:]
+
 	def __special_function(self, y):
 		A, B  = self.A, self.B
 		t, dt = self.t, self.dt
@@ -653,39 +665,188 @@ class AdamsImplicitSolver:
 			self.values[i][:] = self.values[i + 1]
 		self.values[-1][:] = value
 
-# TODO
-class ExplicitMultiStepSolver:
-	pass
-
-# TODO
-class ImplicitMultiStepSolver:
-	pass
-
-
-# TODO
-#solver with automatic step selection
-class AutoSolver:
-	def __init__(self, ivp_solver, eps):
-		self.ivp_solver = ivp_solver
-		self.eps = abs(eps)
-
-	def value(self):
+class ExplicitMultistepSolver(SolverBase):
+	def __init__(self, ivp_solver, a_coefs, b_coefs, dt):
+		# order >= 1
+		# ivp_solver should guarantee appropriate accuracy
+		super(ExplicitMultistepSolver, self).__init__(ivp_solver.function, ivp_solver.jacobian, ivp_solver.t, ivp_solver.u)
 		
-		return self.ivp_solver.value()
+		self.ivp_solver = ivp_solver
+
+		self.sys_order = len(ivp_solver.value())
+
+		self.dt = dt
+
+		self.a_coefs = a_coefs.copy()
+		self.b_coefs = b_coefs.copy()
+		
+		self.steps = len(a_coefs) - 1
+
+		self.values = np.zeros((self.steps, self.sys_order), np.float64)
+		for i in range(self.steps - 1):
+			self.values[i][:] = ivp_solver.value()[:]
+			ivp_solver.evolve(self.t + i * dt, dt)
+		self.values[-1][:] = ivp_solver.value()[:]
+
+		self.t = ivp_solver.t
+		self.u[:] = self.values[-1][:]
 
 	def evolve(self, t, dt):
-		while True:
-			while True:
-				break
-			break
+		# dt - ignored
 
+		f  = self.function
+		y  = self.values
+		a  = self.a_coefs
+		b  = self.b_coefs
+		dt = self.dt
+
+		next = np.zeros((self.sys_order,), np.float64)
+		for i in range(self.steps):
+			next -= a[i] * y[i]
+		for i in range(min(self.steps, len(b))):
+			j = (self.steps - 1) - i
+			next += dt * b[i] * f(t - j * dt, y[i])
+		next /= a[-1]
+		self.__right_round_like_a_record_baby(next)
+
+		self.t = t + dt # DANGER
+		self.u[:] = self.values[-1][:]
+
+	def __right_round_like_a_record_baby(self, value):
+		for i in range(self.steps - 1):
+			self.values[i][:] = self.values[i + 1][:]
+		self.values[-1][:] = value[:]
+
+class ImplicitMultistepSolver(SolverBase):
+	def __init__(self, ivp_solver, neuton_solver, a_coefs, b_coefs, dt):
+		# order >= 0
+		# ivp_solver should guarantee appropriate accuracy
+
+		super(ImplicitMultistepSolver, self).__init__(ivp_solver.function, ivp_solver.jacobian, ivp_solver.t, ivp_solver.u)
+
+		self.ivp_solver = ivp_solver
+		self.neuton_solver = neuton_solver
+
+		self.sys_order = len(ivp_solver.value())
+
+		self.dt = dt
+		self.A  = None
+		self.B  = None
+
+		self.a_coefs = a_coefs.copy()
+		self.b_coefs = b_coefs.copy()
+		self.steps = len(self.a_coefs) - 1
+
+		self.values = np.zeros((self.steps, self.sys_order), np.float64)
+		for i in range(self.steps - 1):
+			self.values[i][:] = ivp_solver.value()
+			ivp_solver.evolve(self.t + i * dt, dt)
+		self.values[-1][:] = ivp_solver.value()
+
+		self.t = ivp_solver.t
+		self.u[:] = self.values[-1][:]
+
+	def evolve(self, t, dt):
+		# dt - ignored
+
+		f = self.function
+		y = self.values
+		a = self.a_coefs
+		b = self.b_coefs
+		dt = self.dt
+
+		B = np.zeros((self.sys_order,), np.float64)
+		for i in range(self.steps):
+			B += a[i] * y[i]
+		for i in range(min(self.steps, len(b))):
+			j = (self.steps - 1) - i
+			B -= dt * b[i] * f(t - j * dt, y[i])
+		
+		A = dt * (b[-1] if len(a) == len(b) else 0)
+
+		self.t = t
+		self.A = A
+		self.B = B
+
+		next = y[-1].copy()
+		next = self.neuton_solver.solve(self.__special_function, self.__special_jacobian, next)
+
+		self.__right_round_like_a_record_baby(next)
+
+		self.t = t + dt
+		self.u = self.values[-1][:]
+
+	def __special_function(self, y):
+		A, B  = self.A, self.B
+		t, dt = self.t, self.dt
+		a, b  = self.a_coefs, self.b_coefs
+		f = self.function
+
+		return a[-1] * y + B - A * f(t + dt, y)
+		
+	def __special_jacobian(self, y):
+		A, B  = self.A, self.B
+		t, dt = self.t, self.dt
+		a, b  = self.a_coefs, self.b_coefs
+		j = self.jacobian
+
+		special_jacobian = -A * j(t + dt, y)
+		for i in range(self.sys_order):			
+			special_jacobian[i][i] += 1.0 * a[-1]
+		return special_jacobian
+	
+	def __right_round_like_a_record_baby(self, value):
+		for i in range(self.steps - 1):
+			self.values[i][:] = self.values[i + 1]
+		self.values[-1][:] = value
+
+
+# solver wrapper for automatic integration
+# TEST
+# do not use with multistep solvers
+class AutoSolver(SolverBase):
+	def __init__(self, ivp_solver, coef_increase = 2.0, eps = 1e-15):
+		super(AutoSolver, self).__init__(ivp_solver.function, ivp_solver.jacobian, ivp_solver.t, ivp_solver.u)
+
+		self.ivp_solver = ivp_solver
+		self.coef_increase = coef_increase
+		self.eps = abs(eps)
+
+	def evolve(self, t, dt):
+		eps = self.eps
+		inc    = self.coef_increase
+		solver = self.ivp_solver
+
+		_, u0 = solver.get_state()
+		t0  = t
+		dt0 = dt
+		tn  = t + dt
+		while t0 < tn:
+			if t0 + dt0 > tn:
+				dt0 = tn - t0
+
+			solver.set_state(t0, u0)
+			solver.evolve(t0, dt0)
+			t1, u1 = solver.get_state()
+
+			solver.set_state(t0, u0)
+			solver.evolve(t0          , dt0 / 2)
+			solver.evolve(t0 + dt0 / 2, dt0 / 2)
+			t2, u2 = solver.get_state()
+		
+			curr_eps = abs(u1 - u2).max()
+			if curr_eps < eps:
+				u0[:] = u2[:]
+				t0 = t0 + dt0
+				dt0 *= inc
+			else:
+				dt0 /= 2
+
+		self.t = t + dt
+		self.u[:] = u0[:]
+				
 
 #tests
-def test_adams_coefs():
-	print(build_explicit_adams(4))
-	print(build_implicit_adams(4))
-
-
 def test_equation(t, u):
 	v, w = u[0], u[1]
 
@@ -711,74 +872,177 @@ def solution1(t):
 	res[0] = m.exp(t * t) 
 	return res
 
-def test_solver_value(solver, t0, dt, count, test):
-	for i in range(count):
+
+def test_solver(solver, start, end, t0, dt):
+	for i in range(start, end):
 		solver.evolve(t0 + i * dt, dt)
-	print(solver.value(), ' ', test)
-	return solver.value() - test
 
-def get_values(solver, t0, dt, count):
-	values = []
-	for i in range(count):
-		values.append(solver.value().copy())
-		solver.evolve(t0 + i * dt, dt)
-	values.append(solver.value().copy())
+def test_adams_coefs():
+	print(build_explicit_adams(4))
+	print(build_implicit_adams(4))
 
-	return values
-
-def test_rk_solvers():
-	equ = test_equation
-	sol = solution
-
-	t0 = 0.0
-	u0 = sol(t0)
-	count = 1000
-	dt = 10.0 / count
-
-	test_val = sol(dt * count)
-
-
-	rke_solver = RKE(classic_4(), equ, u0)
-	rki_solver0 = RKI_better(qin_zha_2(), equ, DiffJacobian2(equ), NeutonSolver(1e-15, 70), u0)
-	rki_solver1 = RKI_better(kra_spi_2(), equ, DiffJacobian2(equ), NeutonSolver(1e-15, 70), u0)
-	rki_solver2 = RKI_better(gauss_legendre_6(), equ, DiffJacobian2(equ), NeutonSolver(1e-15, 70), u0)
-
-	print(test_solver_value(rke_solver , t0, dt, count, test_val))
-	print(test_solver_value(rki_solver0, t0, dt, count, test_val))
-	print(test_solver_value(rki_solver1, t0, dt, count, test_val))
-	print(test_solver_value(rki_solver2, t0, dt, count, test_val))
-
-def test_adams_solvers():
+def test_rki_solver():
 	t0 = 0.0
 	u0 = solution(t0)
-	count = 100000
-	dt = 1.0 / count
+	tn = 1.0
+	un = solution(tn)
 
-	test_val = solution(1.0)
+	n  = 1000
+	dt = (tn - t0) / n
 
-	rki_solver0 = RKI_better(lobattoIIIC_4(), test_equation, DiffJacobian2(test_equation), NeutonSolver(1e-15, 50), u0)
-	rki_solver1 = RKI_better(lobattoIIIC_4(), test_equation, DiffJacobian2(test_equation), NeutonSolver(1e-15, 50), u0)
-	rk_solver   = RKI_naive(gauss_legendre_6(), test_equation, DiffJacobian2(test_equation), NeutonSolver(1e-15, 50), u0)
+	f = test_equation
+	j = DiffJacobian2(f, 1e-7)
 
-	order = 4
-	ae_solver = AdamsExplicitSolver(order, rki_solver0, test_equation, t0, dt)
-	ai_solver = AdamsImplicitSolver(order, rki_solver1, test_equation, DiffJacobian2(test_equation), NeutonSolver(1e-15, 50), t0, dt)
+	ivp_solver = RKI_naive(lobattoIIIC_4(), f, j, NeutonSolver(1e-15, 100), t0, u0)
 
-	#ae_values = get_values(ae_solver, t0 + (order - 1) * dt, dt, count - order)
-	#ai_values = get_values(ai_solver, t0 + (order - 1) * dt, dt, count - order)
-	#rk_values = get_values(rk_solver, t0                   , dt, count        )[order - 1:]
-	
-	#for i in range(len(ae_values)):
-	#	print(ae_values[i], ' ', ai_values[i], ' ', rk_values[i])
+	test_solver(ivp_solver, 0, 1, t0, dt)
 
-	print(test_solver_value(ae_solver, t0 + (order - 1) * dt, dt, count - order + 1, test_val))
-	print(test_solver_value(ai_solver, t0 + (order - 1) * dt, dt, count - order + 1, test_val))
-	print(test_solver_value(rk_solver, t0, dt, count, test_val))
+	print(ivp_solver.t)
+	print(ivp_solver.value() - un)
 
-def test_auto_solver():
+def test_rke_solver():
+	t0 = 0.0
+	u0 = solution(t0)
+	tn = 1.0
+	un = solution(tn)
 
-	pass
+	n  = 1000
+	dt = (tn - t0) / n
+
+	f = test_equation
+	j = None
+
+	ivp_solver = RKE(classic_4(), f, t0, u0)
+
+	test_solver(ivp_solver, 0, n, t0, dt)
+
+	print(ivp_solver.t)
+	print(ivp_solver.value() - un)
+
+def test_multistep_solver_explicit():
+	t0 = 0.0
+	u0 = solution(t0)
+	tn = 1.0
+	un = solution(tn)
+
+	n  = 1000
+	dt = (tn - t0) / n
+
+	f = test_equation
+	j = DiffJacobian2(f, 1e-7)
+
+	ivp_solver = RKI_naive(lobattoIIIC_4(), f, j, NeutonSolver(1e-15, 100), t0, u0)
+
+	a_coefs, b_coefs = build_explicit_adams(4)
+	ems = ExplicitMultistepSolver(ivp_solver, a_coefs, b_coefs, dt)
+
+	test_solver(ems, ems.steps - 1, n, t0, dt)
+
+	print(ems.t)
+	print(ems.value() - un) 
+
+def test_multistep_solver_implicit():
+	t0 = 0.0
+	u0 = solution(t0)
+	tn = 1.0
+	un = solution(tn)
+
+	n  = 1000
+	dt = (tn - t0) / n
+
+	f = test_equation
+	j = DiffJacobian2(f, 1e-7)
+
+	ivp_solver = RKI_naive(lobattoIIIC_4(), f, j, NeutonSolver(1e-15, 100), t0, u0)
+
+	a_coefs, b_coefs = build_implicit_adams(4)
+	ims = ImplicitMultistepSolver(ivp_solver, NeutonSolver(1e-15, 100), a_coefs, b_coefs, dt)
+
+	test_solver(ims, ims.steps - 1, n, t0, dt)
+
+	print(ims.t)
+	print(ims.value() - un) 
+
+def test_adams_solver_explicit():
+	t0 = 0.0
+	u0 = solution(t0)
+	tn = 1.0
+	un = solution(tn)
+
+	n  = 1000
+	dt = (tn - t0) / n
+
+	f = test_equation
+	j = None
+
+	ivp_solver = RKE(classic_4(), f, t0, u0)
+
+	ems = AdamsExplicitSolver(5, ivp_solver, dt)
+
+	test_solver(ems, ems.steps - 1, n, t0, dt)
+
+	print(ems.t)
+	print(ems.value() - un)
+
+def test_adams_solver_implicit():
+	t0 = 0.0
+	u0 = solution(t0)
+	tn = 1.0
+	un = solution(tn)
+
+	n  = 1000
+	dt = (tn - t0) / n
+
+	f = test_equation
+	j = DiffJacobian2(f, 1e-7)
+
+	ivp_solver = RKI_naive(lobattoIIIC_4(), f, j, NeutonSolver(1e-15, 100), t0, u0)
+
+	ims = AdamsImplicitSolver(3, ivp_solver, NeutonSolver(1e-15, 100), dt)
+
+	test_solver(ims, ims.steps - 1, n, t0, dt)
+
+	print(ims.t)
+	print(ims.value() - un)
+
+# TEST
+def test_automatic_solver():
+	t0 = 0.0
+	u0 = solution(t0)
+	tn = 1.0
+	un = solution(tn)
+
+	n  = 1000
+	dt = (tn - t0) / n
+
+	f = test_equation
+	j = DiffJacobian2(f, 1e-7)
+
+	ivp_solver = RKI_naive(lobattoIIIC_4(), f, j, NeutonSolver(1e-15, 100), t0, u0)
+
+	auto_solver = AutoSolver(ivp_solver, 2, 1e-3)
+
+	test_solver(auto_solver, 0, 1, t0, dt)
+
+	print(auto_solver.t)
+	print(auto_solver.value() - un) 
+
+def run_tests():
+	print('RKI')
+	test_rki_solver()
+	print('RKE')
+	test_rke_solver()
+	print('EMS')
+	test_multistep_solver_explicit()
+	print('IMS')
+	test_multistep_solver_implicit()
+	print('AES')
+	test_adams_solver_explicit()
+	print('AIS')
+	test_adams_solver_implicit()
+	print('AUTO')
+	test_automatic_solver()
+
 
 if __name__ == '__main__':
-	test_rk_solvers()
-	#test_adams_coefs()
+	run_tests()

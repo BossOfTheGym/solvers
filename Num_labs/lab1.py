@@ -3,7 +3,7 @@ import math  as m
 import cmath as cm
 import copy  as c
 import matplotlib.pyplot as plt
-
+import solvers
 
 
 class IdentityFunction:
@@ -172,19 +172,10 @@ def demo_implicit():
 		plot_method(method)
 
 def demo():
-	demo_explicit()
-	demo_implicit()
-
+	# EXAMPLE
+	a,b = solvers.build_bdf_6()
+	plot_method(Method(a, b))
 
 
 if __name__ == '__main__':
-	print('!!!Polynomial coefficients should go from lower degree to higher!!!')
-	print('Enter alpha coefs')
-	alpha_coefs = parse_coefs(input())
-	print('Enter beta coefs')
-	beta_coefs  = parse_coefs(input())
-
-	method = Method(alpha_coefs, beta_coefs)
-	plot_method(method)
-	#demo()
-	
+	demo()
