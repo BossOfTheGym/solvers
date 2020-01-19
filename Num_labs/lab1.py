@@ -174,7 +174,7 @@ def demo_implicit():
 def demo():
 	# EXAMPLE
 	a,b = solvers.build_bdf_6()
-	plot_method(Method(a, b))
+	plot_method(Method([0, -1, +1], [-1/6, 5/6, 1/3]))
 
 
 if __name__ == '__main__':

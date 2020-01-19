@@ -67,14 +67,19 @@ def solve_first():
 	u0 = np.float64((0, 1, 1))                          # initial value
 	tn = 500.0                                          # final time
 	un = np.float64((-1.893e-7, 0.5976547, 1.40223434)) # final value(for test)
-	n = 50000                                            # count of intervals
+	n = 500000                                            # count of intervals
 	dt = (tn - t0) / n                                  # time delta
 
 	f = first_equation
 	j = fe_jacob
 
 	# Initialize your solver here and call integrate_equation()
-	solver = solvers.RKI_naive(solvers.lobattoIIIC_4(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
+	# solver = solvers.RKI_naive(solvers.gauss_legendre_6(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
+
+	ini_solver = solvers.RKI_better(solvers.gauss_legendre_6(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
+
+	a, b = solvers.build_implicit_adams(2)
+	solver = solvers.ImplicitMultistepSolver(ini_solver, solvers.NeutonSolver(1e-15, 100), a, b, dt)
 
 	integrate_equation(solver, dt, tn)
 
@@ -98,7 +103,12 @@ def solve_second():
 	j = se_jacob
 
 	# Initialize your solver here and call integrate_equation()
-	solver = solvers.RKI_naive(solvers.lobattoIIIC_2(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
+	# solver = solvers.RKI_naive(solvers.lobattoIIIC_2(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
+
+	ini_solver = solvers.RKI_naive(solvers.gauss_legendre_6(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
+
+	a, b = solvers.build_implicit_adams(2)
+	solver = solvers.ImplicitMultistepSolver(ini_solver, solvers.NeutonSolver(1e-15, 100), a, b, dt)
 
 	integrate_equation(solver, dt, tn)
 

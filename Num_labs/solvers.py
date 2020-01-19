@@ -330,6 +330,7 @@ class RKI_naive(SolverBase):
 
 		return z - special_function		
 
+#TEST
 class RKI_better(SolverBase):
 	def __init__(self, tableau, function, jacobian, neuton_solver, t0, u0):
 		super(RKI_better, self).__init__(function, jacobian, t0, u0)
@@ -340,8 +341,6 @@ class RKI_better(SolverBase):
 
 		self.dt = 0.0
 
-		self.function = func
-		self.jacobian = jacob
 		self.neuton_solver = neuton_solver	
 
 	def evolve(self, t, dt):
@@ -805,7 +804,7 @@ class ImplicitMultistepSolver(SolverBase):
 # TEST
 # do not use with multistep solvers
 class AutoSolver(SolverBase):
-	def __init__(self, ivp_solver, coef_increase = 2.0, eps = 1e-15):
+	def __init__(self, ivp_solver, coef_increase = 2.0, eps = 1e-15, order = 1):
 		super(AutoSolver, self).__init__(ivp_solver.function, ivp_solver.jacobian, ivp_solver.t, ivp_solver.u)
 
 		self.ivp_solver = ivp_solver
