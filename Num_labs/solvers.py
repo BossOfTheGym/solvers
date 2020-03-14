@@ -369,6 +369,7 @@ class RKI_better(SolverBase):
 		du *= dt
 
 		#update result
+		self.t = t + dt
 		self.u += du
 
 	def __special_jacobian(self, z):
@@ -954,7 +955,7 @@ def test_multistep_solver_implicit():
 
 	ivp_solver = RKI_naive(lobattoIIIC_4(), f, j, NeutonSolver(1e-15, 100), t0, u0)
 
-	a_coefs, b_coefs = build_implicit_adams(4)
+	a_coefs, b_coefs = build_explicit_adams(4)
 	ims = ImplicitMultistepSolver(ivp_solver, NeutonSolver(1e-15, 100), a_coefs, b_coefs, dt)
 
 	test_solver(ims, ims.steps - 1, n, t0, dt)
@@ -976,7 +977,7 @@ def test_adams_solver_explicit():
 
 	ivp_solver = RKE(classic_4(), f, t0, u0)
 
-	ems = AdamsExplicitSolver(5, ivp_solver, dt)
+	ems = AdamsExplicitSolver(6, ivp_solver, dt)
 
 	test_solver(ems, ems.steps - 1, n, t0, dt)
 
@@ -997,7 +998,7 @@ def test_adams_solver_implicit():
 
 	ivp_solver = RKI_naive(lobattoIIIC_4(), f, j, NeutonSolver(1e-15, 100), t0, u0)
 
-	ims = AdamsImplicitSolver(3, ivp_solver, NeutonSolver(1e-15, 100), dt)
+	ims = AdamsImplicitSolver(6, ivp_solver, NeutonSolver(1e-15, 100), dt)
 
 	test_solver(ims, ims.steps - 1, n, t0, dt)
 

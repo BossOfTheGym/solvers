@@ -50,7 +50,7 @@ def se_jacob(t, u):
 def integrate_equation(solver, dt, tn, output_every=1000):
 	i = 0
 	while True:
-		if i % 1000 == 0:
+		if i % output_every == 0:
 			t, u = solver.get_state()
 			print(f't: {t} | u: {u} |')
 		i += 1
@@ -106,7 +106,7 @@ def solve_second():
 	# solver = solvers.RKI_naive(solvers.gauss_legendre_6(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
 	solver = solvers.RKE(solvers.classic_4(), f, t0, u0)
 
-	integrate_equation(solver, dt, tn)
+	integrate_equation(solver, dt, tn, 100000)
 
 	yn = solver.value()
 

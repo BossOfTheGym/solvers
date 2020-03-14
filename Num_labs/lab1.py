@@ -131,7 +131,7 @@ def plot_method(method):
 	x_min, x_max = 1.1 * min(x_bound) - 0.5, 1.1 * max(x_bound) + 0.5
 	y_min, y_max = 1.1 * min(y_bound) - 0.5, 1.1 * max(y_bound) + 0.5
  
-	z_domain = get_scatter_points(method, x_min, x_max, y_min, y_max, 50, 50)
+	z_domain = get_scatter_points(method, x_min, x_max, y_min, y_max, 500, 500)
 	x_domain, y_domain = split_z(z_domain)
 
 	plt.scatter(x_domain, y_domain, [0.3 for z in z_domain])
@@ -173,8 +173,8 @@ def demo_implicit():
 
 def demo():
 	# EXAMPLE
-	a,b = solvers.build_bdf_6()
-	plot_method(Method([0, -1, +1], [-1/6, 5/6, 1/3]))
+	a,b = solvers.build_implicit_adams(20)
+	plot_method(Method(a, b))
 
 
 if __name__ == '__main__':
