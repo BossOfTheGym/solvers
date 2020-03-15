@@ -50,7 +50,7 @@ def se_jacob(t, u):
 def integrate_equation(solver, dt, tn, output_every=1000):
 	i = 0
 	while True:
-		if i % 1000 == 0:
+		if i % output_every == 0:
 			t, u = solver.get_state()
 			print(f't: {t} | u: {u} |')
 		i += 1
@@ -96,7 +96,7 @@ def solve_second():
 	u0 = np.float64((1, 0, 0))                          # initial value
 	tn = 40.0                                           # final time
 	un = np.float64((0.7158271, 9.186e-6, 0.2841637))   # final value(for test)
-	n = 80000000                                          # count of intervals
+	n = 80000000                                        # count of intervals
 	dt = (tn - t0) / n                                  # time delta
 
 	f = second_equation

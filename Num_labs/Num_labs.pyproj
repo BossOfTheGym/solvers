@@ -21,12 +21,6 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="ArrowHead.py">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="bubble.py">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="lab2.py">
       <SubType>Code</SubType>
     </Compile>
