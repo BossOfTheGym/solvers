@@ -158,8 +158,9 @@ def solve_third():
 	t0 = 0.0                                            # initial time
 	u0 = np.float64((m.cos(1.1), 0, m.sin(1.1)))                          # initial value
 	tn = 100.0                                            # final time
-	n = 10000										     # count of intervals
+	n = 1000										     # count of intervals
 	dt = (tn - t0) / n                                  # time delta
+	output_every = 1
 
 	I1 = 2
 	I2 = 1
@@ -171,35 +172,57 @@ def solve_third():
 	f = third_equation
 	j = te_jacob
 
-	# Initialize your solver here and call integrate_equation()
-	solver = solvers.RKI_naive(solvers.gauss_legendre_6(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
-	# solver = solvers.RKE(solvers.classic_4(), f, t0, u0)
+	def integrate_with_solver(solver):
+		i = 0
+		t_values = []
+		u1_values = []
+		u2_values = []
+		u3_values = []
+		inv_first  = []
+		inv_second = []
+		while True:
+			if i % output_every == 0:
+				t, u = solver.get_state()
+				u1, u2, u3 = u
 
-	i = 0
-	t_values = []
-	u1_values = []
-	u2_values = []
-	u3_values = []
-	output_every = 50
-	while True:
-		if i % output_every == 0:
-			t, u = solver.get_state()
-			t_values.append(t)
-			u1_values.append(u[0])
-			u2_values.append(u[1])
-			u3_values.append(u[2])
-		i += 1
+				t_values.append(t)
+				u1_values.append(u1)
+				u2_values.append(u2)
+				u3_values.append(u3)
 
-		t = solver.t
-		if t < tn:
-			solver.evolve(t, dt)
-		else:
-			break
+				inv_first.append(u1 * u1 + u2 * u2 + u3 * u3)
+				inv_second.append(u1 * u1 / I1 + u2 * u2 / I2 + u3 * u3 / I3)
+			i += 1
 
-	fig = pyplot.figure()
-	ax = fig.add_subplot(1, 1, 1, projection='3d')
-	ax.scatter(u1_values, u2_values, u3_values);
-	pyplot.show()
+			t = solver.t
+			if t < tn:
+				solver.evolve(t, dt)
+			else:
+				break
+
+		max_delta = 0.0
+		for inv in inv_first:
+			max_delta = max(max_delta, m.fabs(inv_first[0] - inv))
+		print('Maximum first invariant deviation: ', max_delta)
+
+		max_delta = 0.0
+		for inv in inv_second:
+			max_delta = max(max_delta, m.fabs(inv_second[0] - inv))
+		print('Maximum second invariant deviation: ', max_delta)
+
+		fig = pyplot.figure()
+		ax = fig.add_subplot(1, 1, 1, projection='3d')
+		ax.scatter(u1_values, u2_values, u3_values);
+		pyplot.show()
+
+	solver = solvers.RKI_naive(solvers.implicit_midpoint_2(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
+	integrate_with_solver(solver)
+
+	solver = solvers.RKE(solvers.classic_4(), f, t0, u0)
+	integrate_with_solver(solver)
+	
+	solver = solvers.RKE(solvers.euler_1(), f, t0, u0)
+	integrate_with_solver(solver)
 	
 
 def main():
