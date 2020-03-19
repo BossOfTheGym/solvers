@@ -156,9 +156,9 @@ def solve_second():
 def solve_third():
 	# initial value problem
 	t0 = 0.0                                            # initial time
-	u0 = np.float64((m.cos(1.1), 0, m.sin(1.1)))                          # initial value
-	tn = 100.0                                            # final time
-	n = 1000										     # count of intervals
+	u0 = np.float64((m.cos(1.1), 0, m.sin(1.1)))        # initial value
+	tn = 100.0                                          # final time
+	n = 1000										    # count of intervals
 	dt = (tn - t0) / n                                  # time delta
 	output_every = 1
 
@@ -168,6 +168,10 @@ def solve_third():
 	a = (I2 - I3) / (I2 * I3)
 	b = (I3 - I1) / (I3 * I1)
 	c = (I1 - I2) / (I1 * I2)
+
+	u01, u02, u03 = u0
+	i1 = u01 * u01 + u02 * u02 + u03 * u03
+	i2 = u01 * u01 / I1 + u02 * u02 / I2 + u03 * u03 / I3
 
 	f = third_equation
 	j = te_jacob
@@ -202,12 +206,12 @@ def solve_third():
 
 		max_delta = 0.0
 		for inv in inv_first:
-			max_delta = max(max_delta, m.fabs(inv_first[0] - inv))
+			max_delta = max(max_delta, m.fabs(i1 - inv))
 		print('Maximum first invariant deviation: ', max_delta)
 
 		max_delta = 0.0
 		for inv in inv_second:
-			max_delta = max(max_delta, m.fabs(inv_second[0] - inv))
+			max_delta = max(max_delta, m.fabs(i2 - inv))
 		print('Maximum second invariant deviation: ', max_delta)
 
 		fig = pyplot.figure()
@@ -221,7 +225,7 @@ def solve_third():
 	solver = solvers.RKE(solvers.classic_4(), f, t0, u0)
 	integrate_with_solver(solver)
 	
-	solver = solvers.RKE(solvers.explict_euler_1(), f, t0, u0)
+	solver = solvers.RKE(solvers.explicit_euler_1(), f, t0, u0)
 	integrate_with_solver(solver)
 	
 
