@@ -1,4 +1,8 @@
 import numpy as np
+import math as m
+
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import pyplot
 
 import solvers
 
@@ -47,6 +51,39 @@ def se_jacob(t, u):
 	return res
 
 
+def third_equation(t, u):
+	I1 = 2
+	I2 = 1
+	I3 = 2/3
+	a = (I2 - I3) / (I2 * I3)
+	b = (I3 - I1) / (I3 * I1)
+	c = (I1 - I2) / (I1 * I2)
+
+	u1, u2, u3 = u[0], u[1], u[2]
+
+	u = np.zeros(u.shape, np.float64)
+	u[0] = a * u2 * u3
+	u[1] = b * u3 * u1
+	u[2] = c * u1 * u2	
+	return u
+
+def te_jacob(t, u):
+	I1 = 2
+	I2 = 1
+	I3 = 2/3
+	a = (I2 - I3) / (I2 * I3)
+	b = (I3 - I1) / (I3 * I1)
+	c = (I1 - I2) / (I1 * I2)
+
+	u1, u2, u3 = u[0], u[1], u[2]
+
+	res = np.zeros((3,3), np.float64)
+	res[0][0] = 0;      res[0][1] = a * u3; res[0][2] = a * u2;
+	res[1][0] = b * u3; res[1][1] = 0;      res[1][2] = b * u1;
+	res[2][0] = c * u2; res[2][1] = c * u1; res[2][2] = 0;
+	return res
+
+
 def integrate_equation(solver, dt, tn, output_every=1000):
 	i = 0
 	while True:
@@ -60,6 +97,7 @@ def integrate_equation(solver, dt, tn, output_every=1000):
 			solver.evolve(t, dt)
 		else:
 			break
+
 
 def solve_first():
 	# initial value problem
@@ -115,10 +153,59 @@ def solve_second():
 	print(f'Expected:{un}')
 	print(f'Got     :{yn}')
 
+def solve_third():
+	# initial value problem
+	t0 = 0.0                                            # initial time
+	u0 = np.float64((m.cos(1.1), 0, m.sin(1.1)))                          # initial value
+	tn = 100.0                                            # final time
+	n = 10000										     # count of intervals
+	dt = (tn - t0) / n                                  # time delta
+
+	I1 = 2
+	I2 = 1
+	I3 = 2/3
+	a = (I2 - I3) / (I2 * I3)
+	b = (I3 - I1) / (I3 * I1)
+	c = (I1 - I2) / (I1 * I2)
+
+	f = third_equation
+	j = te_jacob
+
+	# Initialize your solver here and call integrate_equation()
+	solver = solvers.RKI_naive(solvers.gauss_legendre_6(), f, j, solvers.NeutonSolver(1e-15, 100), t0, u0)
+	# solver = solvers.RKE(solvers.classic_4(), f, t0, u0)
+
+	i = 0
+	t_values = []
+	u1_values = []
+	u2_values = []
+	u3_values = []
+	output_every = 50
+	while True:
+		if i % output_every == 0:
+			t, u = solver.get_state()
+			t_values.append(t)
+			u1_values.append(u[0])
+			u2_values.append(u[1])
+			u3_values.append(u[2])
+		i += 1
+
+		t = solver.t
+		if t < tn:
+			solver.evolve(t, dt)
+		else:
+			break
+
+	fig = pyplot.figure()
+	ax = fig.add_subplot(1, 1, 1, projection='3d')
+	ax.scatter(u1_values, u2_values, u3_values);
+	pyplot.show()
+	
 
 def main():
-	#solve_first()
-	solve_second()
+	# solve_first()
+	# solve_second()
+	solve_third()
 
 
 if __name__ == '__main__':
