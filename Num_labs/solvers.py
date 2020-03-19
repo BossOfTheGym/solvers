@@ -141,7 +141,7 @@ class Tableau:
 		self.cVec = np.copy(cVec)
 
 # explicit
-def euler_1():
+def explicit_euler_1():
 	a_mat = np.float64( ((0,),) )
 	b_vec = np.float64( (1,) )
 	c_vec = np.float64( (0,) )

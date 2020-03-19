@@ -221,7 +221,7 @@ def solve_third():
 	solver = solvers.RKE(solvers.classic_4(), f, t0, u0)
 	integrate_with_solver(solver)
 	
-	solver = solvers.RKE(solvers.euler_1(), f, t0, u0)
+	solver = solvers.RKE(solvers.explic_euler_1(), f, t0, u0)
 	integrate_with_solver(solver)
 	
 
