@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.linalg as lin
 import math as m
 
 from mpl_toolkits.mplot3d import Axes3D
@@ -229,10 +230,254 @@ def solve_third():
 	integrate_with_solver(solver)
 	
 
+def kepler_test():	
+	k = 0.005
+
+	def kepler_H(p, q):
+		pp = np.dot(p, p)
+		qq = np.dot(q, q)
+
+		qSqR = np.sqrt(qq)
+
+		res = np.zeros((1, 1), np.float64)
+		res[0,0] = pp / 2 - 1 / qSqR - k / (qSqR * qq)
+		return res
+
+	def kepler_dHdp(p, q):
+		
+		return np.float64(p)
+
+	def kepler_dHdq(p, q):
+		pp = np.dot(p, p)
+		qq = np.dot(q, q)
+
+		qSqR = np.sqrt(qq)
+
+		return -(3 * k - qSqR) / (qSqR * qq) * (q / qSqR)
+
+	def kepler_dH(p, q):
+		newP = np.zeros((2,), np.float64)
+		newQ = np.zeros((2,), np.float64)
+		newP = kepler_dHdp(p, q)
+		newQ = kepler_dHdq(p, q)
+		return newP, newQ
+
+
+	def kepler_L(p, q):
+		p1, p2 = p[0], p[1]
+		q1, q2 = q[0], q[1]
+
+		res = np.zeros((1, 1), np.float64)
+		res[0, 0] = q1 * p2 - q2 * p1
+		return res
+
+	def kepler_dL(p, q):
+		p1, p2 = p[0], p[1]
+		q1, q2 = q[0], q[1]
+
+		newP = np.zeros((2,), np.float64)
+		newQ = np.zeros((2,), np.float64)
+		newP[0] = -q2
+		newP[1] =  q1
+		newQ[0] =  p2
+		newQ[1] = -p1
+		return newP, newQ
+
+
+	def kepler_equation(p, q):
+
+		return (-kepler_dHdq(p, q), kepler_dHdp(p, q))
+
+	def kepler_adaptor(t, u):
+		p = u[0 : 2]
+		q = u[2 : 4]
+		p, q = kepler_equation(p, q)
+		res = np.zeros((4,), np.float64)
+		res[0 : 2] = p
+		res[2 : 4] = q
+		return res
+
+	
+	def project_to_H(p, q, H0):
+		# to matrix
+		H0 = np.float64(H0).reshape((1, 1))
+
+		# vector to project
+		y = np.zeros((4,), np.float64)
+		y[0 : 2] = p
+		y[2 : 4] = q
+
+		# derivatives of jacobian
+		dp, dq = kepler_dH(p, q)
+
+		dgT = np.zeros((4, 1), np.float64)
+		dgT[0 : 2, :] = dp.reshape((2, 1))
+		dgT[2 : 4, :] = dq.reshape((2, 1))
+		dg = dgT.reshape((1, 4))
+
+		# inverse of matrix
+		dgdgTi = lin.inv(dg @ dgT)
+
+		# lambda vec		
+		l = np.zeros((1,), np.float64)
+
+		# first simplified neuton iteration
+		tmp = y + dgT @ l
+		p = tmp[0 : 2]
+		q = tmp[2 : 4]
+		l += -(dgdgTi @ (kepler_H(p, q) - H0)).reshape((1,))
+
+		# second simplified neuton iteration
+		tmp = y + dgT @ l
+		p = tmp[0 : 2]
+		q = tmp[2 : 4]
+		l += -(dgdgTi @ (kepler_H(p, q) - H0)).reshape((1,))
+
+		ret = y + dgT @ l
+		return ret[0 : 2], ret[2 : 4]
+			
+		
+	def project_to_HL(p, q, H0, L0):
+		# to matrix
+		H0 = np.float64(H0).reshape((1, 1))
+		L0 = np.float64(L0).reshape((1, 1))
+
+		# vector to project
+		y = np.zeros((4,), np.float64)
+		y[0 : 2] = p
+		y[2 : 4] = q
+
+		# derivatives of jacobian
+		dp0, dq0 = kepler_dH(p, q)
+		dp1, dq1 = kepler_dL(p, q)
+
+		dgT = np.zeros((4, 2), np.float64)
+		dgT[0 : 2, 0] = dp0
+		dgT[2 : 4, 0] = dq0
+		dgT[0 : 2, 1] = dp1
+		dgT[2 : 4, 1] = dq1
+		dg = np.transpose(dgT)
+
+		# inverse of matrix
+		dgdgTi = lin.inv(dg @ dgT)
+
+		# lambda vec		
+		l = np.zeros((2,), np.float64)
+
+		# first simplified neuton iteration
+		tmp = y + dgT @ l
+		p = tmp[0 : 2]
+		q = tmp[2 : 4]
+		tmp = np.zeros((2,), np.float64)
+		tmp[0] = (kepler_H(p, q) - H0)[0, 0]
+		tmp[1] = (kepler_L(p, q) - L0)[0, 0]
+		l += -dgdgTi @ tmp
+
+		# second simplified neuton iteration
+		tmp = y + dgT @ l
+		p = tmp[0 : 2]
+		q = tmp[2 : 4]
+		tmp = np.zeros((2,), np.float64)
+		tmp[0] = (kepler_H(p, q) - H0)[0, 0]
+		tmp[1] = (kepler_L(p, q) - L0)[0, 0]
+		l += -dgdgTi @ tmp
+
+		ret = y + dgT @ l
+		return ret[0 : 2], ret[2 : 4]
+
+	def explicit_euler_step(dt, p, q):
+		newP, newQ = kepler_equation(p, q)
+
+		newP = p + dt * newP
+		newQ = q + dt * newQ
+		return (newP, newQ)
+
+	def explicit_euler_step_proj_H(dt, p, q, H0):
+		newP, newQ = explicit_euler_step(dt, p, q)
+
+		return project_to_H(newP, newQ, H0)
+		
+	def explicit_euler_step_proj_HL(dt, p, q, H0, L0):
+		newP, newQ = explicit_euler_step(dt, p, q)
+
+		return project_to_HL(newP, newQ, H0, L0)
+
+
+	def symplectic_euler_step(dt, p, q):
+		newP = p - dt * kepler_dHdq(p   , q)
+		newQ = q + dt * kepler_dHdp(newP, q)
+		return newP, newQ
+
+	def symplectic_euler_step_proj_H(dt, p, q, H0):
+		newP, newQ = symplectic_euler_step(dt, p, q)
+
+		return project_to_H(newP, newQ, H0)
+
+	def symplectic_euler_step_proj_HL(dt, p, q, H0, L0):
+		newP, newQ = symplectic_euler_step(dt, p, q)
+
+		return project_to_HL(newP, newQ, H0, L0)
+		
+	e = 0.6
+	p0 = np.float64((0, np.sqrt((1 + e) / (1 - e))))
+	q0 = np.float64((1 - e, 0))
+	t0 = 0.0
+	tn = 400.0
+	n  = 10000
+	dt = (tn - t0) / n
+	L0 = kepler_L(p0, q0)[0, 0]
+	H0 = kepler_H(p0, q0)[0, 0]
+	
+	output_every = 4
+	print_every = 2000
+
+	# exact solution(well, not)
+	#u0 = np.zeros((4,), np.float64)
+	#u0[0 : 2] = p0
+	#u0[2 : 4] = q0
+	#solver = solvers.RKE(solvers.classic_4(), kepler_adaptor, t0, u0)	
+	#
+	#i = 0
+	#x = []
+	#y = []
+	#for i in range(n + 1):
+	#	if i % output_every == 0:
+	#		t, u = solver.get_state()
+	#		x.append(u[2])
+	#		y.append(u[3])
+	#	if i % print_every == 0:
+	#		print('t: ', solver.t)
+	#	solver.evolve(t0 + i * dt, dt)
+	#
+	#fig = pyplot.figure()
+	#ax = fig.add_subplot(1, 1, 1)
+	#ax.plot(x, y)
+	#pyplot.show()
+
+	# explicit euler
+	p = p0
+	q = q0
+	x = []
+	y = []
+	for i in range(n + 1):
+		if i % output_every == 0:
+			x.append(q[0])
+			y.append(q[1])
+		if i % print_every == 0:
+			print('t: ', t0 + dt * i)
+		p, q = symplectic_euler_step_proj_HL(dt, p, q, H0, L0)	
+
+	fig = pyplot.figure()
+	ax = fig.add_subplot(1, 1, 1)
+	ax.plot(x, y)
+	pyplot.show()
+
+
 def main():
 	# solve_first()
 	# solve_second()
-	solve_third()
+	# solve_third()
+	kepler_test()
 
 
 if __name__ == '__main__':
