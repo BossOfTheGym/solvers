@@ -422,13 +422,13 @@ def kepler_test():
 	p0 = np.float64((0, np.sqrt((1 + e) / (1 - e))))
 	q0 = np.float64((1 - e, 0))
 	t0 = 0.0
-	tn = 400.0
-	n  = 10000
+	tn = 700.0
+	n  = 700000
 	dt = (tn - t0) / n
 	L0 = kepler_L(p0, q0)[0, 0]
 	H0 = kepler_H(p0, q0)[0, 0]
 	
-	output_every = 4
+	output_every = 2
 	print_every = 2000
 
 	# exact solution(well, not)
@@ -465,20 +465,170 @@ def kepler_test():
 			y.append(q[1])
 		if i % print_every == 0:
 			print('t: ', t0 + dt * i)
-		p, q = symplectic_euler_step_proj_HL(dt, p, q, H0, L0)	
+		p, q = symplectic_euler_step(dt, p, q)	
 
 	fig = pyplot.figure()
 	ax = fig.add_subplot(1, 1, 1)
 	ax.plot(x, y)
 	pyplot.show()
 
+def local_projection_test():
+	# variable order for pendulum equation : p1, p2, q1, q2
+	# variable order for pendulum equation in local coordinates: a, w
+
+	def pend_equ(t, y):
+		p1, p2, q1, q2 = y[0], y[1], y[2], y[3]
+
+		pp = p1 * p1 + p2 * p2
+		qq = q1 * q1 + q2 * q2
+		l = (pp - q2) / qq
+
+		y = np.zeros((4,), np.float64)
+		y[0] = -q1 * l
+		y[1] = -1 - q2 * l
+		y[2] = p1
+		y[3] = p2
+		return y
+
+	def pend_jac(t, y):
+		p1, p2, q1, q2 = y[0], y[1], y[2], y[3]
+
+		pp = p1 * p1 + p2 * p2
+		qq = q1 * q1 + q2 * q2
+		l = (pp - q2) / qq
+
+		j = np.zeros((4, 4), np.float64)
+		j[0, 0] = -2 * p1 * q1 / qq; j[0, 1] = -2 * p2 * q1 / qq; j[0, 2] = l * (q1 * q1 - q2 * q2) / qq; j[0, 3] = (q1 + 2 * l * q1 * q2) / qq;
+		j[1, 0] = -2 * p1 * q2 / qq; j[1, 1] = -2 * p2 * q2 / qq; j[1, 2] = l * q1 * q2 / qq;             j[1, 3] = q2 / qq - l * (q1 * q1 - q2 * q2) / qq;
+		j[2, 0] = 1.0; j[2, 1] = 0.0; j[2, 2] = 0.0; j[2, 3] = 0.0;
+		j[3, 0] = 0.0; j[3, 1] = 1.0; j[3, 2] = 0.0; j[3, 3] = 0.0;
+		return j
+
+
+	def local_pend_equ(t, z):
+		a, w = z[0], z[1]
+
+		z = np.zeros((2,), np.float64)
+		z[0] = w
+		z[1] = -np.sin(a)
+		return z
+
+	def local_pend_jac(t, z):
+		a, w = z[0], z[1]
+
+		j = np.zeros((2, 2), np.float64)
+		j[0, 0] = 0         ; j[0, 1] = 1;
+		j[1, 0] = -np.cos(a); j[1, 1] = 0;
+		return j
+
+	def from_local(z):
+		a, w = z[0], z[1]
+
+		cosa = np.cos(a)
+		sina = np.sin(a)
+
+		y = np.zeros((4,), np.float64)
+		y[0] = w * cosa 
+		y[1] = w * sina
+		y[2] = sina
+		y[3] = -cosa
+		return y
+
+
+	def integrate(solver, t0, dt, n, output_every, print_every):
+		ts = []
+		us = []
+		for i in range(n):
+			t, u = solver.get_state()
+
+			if i % output_every == 0:
+				ts.append(t)
+				us.append(u)
+
+			if i % print_every == 0:
+				print(t, ': ', u)
+
+			solver.evolve(t0 + i * dt, dt)
+		return ts, us
+
+
+	# initial values & parameteres
+	a0 = m.pi / 2
+	w0 = 3
+	
+	z0 = np.float64((a0, w0))
+	
+	u0 = from_local(z0)
+
+	t0 = 0.0
+	tn = 50.0
+	n = 2000
+
+	output_every = 1
+	print_every  = n // 50  
+
+	dt = (tn - t0) / n
+
+	# solvers
+	pend_equ_classic_4 = solvers.RKE(solvers.classic_4(), pend_equ, t0, u0) # test only
+	pend_equ_imp_2     = solvers.RKI_naive(solvers.implicit_midpoint_2(), pend_equ, pend_jac, solvers.NeutonSolver(1e-15, 50), t0, u0)
+
+	pend_loc_equ_classic_4 = solvers.RKE(solvers.classic_4(), local_pend_equ, t0, z0)
+
+	print('----Integrating pendulum equation with classic_4...----')
+	ts, pend_classic_4     = integrate(pend_equ_classic_4, t0, dt, n, output_every, print_every)
+	print()
+
+	print('----Integrating pendulum equation with imp_2...----')
+	ts, pend_imp_2         = integrate(pend_equ_imp_2, t0, dt, n, output_every, print_every)
+	print()
+
+	print('----Integrating local pendulum equation with classic_4...----')
+	ts, pend_loc_classic_4 = integrate(pend_loc_equ_classic_4, t0, dt, n, output_every, print_every)
+	pend_loc_classic_4 = list(map(from_local, pend_loc_classic_4))
+	print()
+
+	# plotting
+	fig = pyplot.figure()
+
+	# plot trajectories
+	def q1q2(ys):
+		q1 = []
+		q2 = []
+		for y in ys:
+			q1.append(y[2])
+			q2.append(y[3])
+		return q1, q2
+
+	ax = fig.add_subplot(1, 2, 1)
+	ax.set_title('trajectory')
+	q1, q2 = q1q2(pend_classic_4)
+	ax.plot(q1, q2)
+	q1, q2 = q1q2(pend_imp_2)
+	ax.plot(q1, q2)
+	q1, q2 = q1q2(pend_loc_classic_4)
+	ax.plot(q1, q2)
+	ax.legend(['c4', 'imp2', 'loc_c4'])
+
+	# plot weak invariant conservation
+	ax = fig.add_subplot(1, 2, 2)
+	ax.set_title('weak invariant')
+	invs = list(map(lambda x: x[2]**2 + x[3]**2, pend_classic_4))
+	ax.plot(ts, invs)
+	invs = list(map(lambda x: x[2]**2 + x[3]**2, pend_imp_2))
+	ax.plot(ts, invs)
+	invs = list(map(lambda x: x[2]**2 + x[3]**2, pend_loc_classic_4))
+	ax.plot(ts, invs)
+	ax.legend(['c4', 'imp2', 'loc_c4'])
+	pyplot.show()
+	
 
 def main():
 	# solve_first()
 	# solve_second()
 	# solve_third()
-	kepler_test()
-
+	# kepler_test()
+	local_projection_test()
 
 if __name__ == '__main__':
 	main()
